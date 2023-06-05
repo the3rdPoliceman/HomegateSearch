@@ -6,6 +6,10 @@ from math import ceil
 import logging
 import requests
 from bs4 import BeautifulSoup
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import email.utils
 
 # Constants
 HOMEGATE_PREFIX = "https://www.homegate.ch"
@@ -13,6 +17,32 @@ RESULT_CLASS = "ResultListHeader_locations_3uuG8"
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
+
+
+def get_email_config(email_config_file):
+    """Loads email configuration from a JSON file."""
+    with open(email_config_file, 'r') as f:
+        return json.load(f)
+
+
+def send_email(subject, body, email_config):
+    """Sends an email with the specified subject and body."""
+    msg = MIMEMultipart()
+    msg['From'] = email_config['smtp_username']
+    msg['To'] = email_config['email_recipient']
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'html'))
+
+    try:
+        server = smtplib.SMTP(email_config['smtp_server'], email_config['smtp_port'])
+        server.starttls()
+        server.login(email_config['smtp_username'], email_config['smtp_password'])
+        text = msg.as_string()
+        server.sendmail(email_config['smtp_username'], email_config['email_recipient'], text)
+        server.quit()
+        logging.info("Email sent successfully!")
+    except Exception as e:
+        logging.info(f"Failed to send email: {e}")
 
 
 def get_page_list(url_template, start_number, end_number):
@@ -84,13 +114,17 @@ def write_json(file_name, data):
 def main():
     """Main function."""
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser = argparse.ArgumentParser(description='Property search program.')
     parser.add_argument('config', type=str, help='A JSON configuration file')
+    parser.add_argument('--email-config', type=str, default='email_config.json', help='An email configuration file')
     args = parser.parse_args()
 
     # Load configuration
     with open(args.config, 'r') as f:
         config = json.load(f)
+
+    # Load email configuration
+    email_config = get_email_config(args.email_config)
 
     url_template = config['url_template']
     postcodes = config['postcodes']
@@ -135,6 +169,19 @@ def main():
                 possible_urls.add(property_address)
             else:
                 rejected_urls.add(property_address)
+
+    # Load existing possible URLs
+    old_possible_urls = set(load_json(possible_file))
+
+    # Check if there are new possible URLs
+    new_possible_urls = possible_urls - old_possible_urls
+    if new_possible_urls:
+        subject = f"New possible properties found for {config['search_name']}"
+        body = f"The following new possible matches were found for your search {config['search_name']}\n\n"
+        body += '\n'.join(new_possible_urls)
+        body += "\n\nThis is in addition to the other previously found matches\n\n"
+        body += '\n'.join(old_possible_urls)
+        send_email(subject, body, email_config)
 
     write_json(possible_file, list(possible_urls))
     write_json(rejected_file, list(rejected_urls))
