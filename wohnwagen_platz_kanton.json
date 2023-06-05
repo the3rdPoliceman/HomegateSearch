@@ -1,0 +1,8 @@
+{
+  "url_template": "https://www.homegate.ch/mieten/parkplatz-garage/plz-{postcode}/trefferliste?ep={page}&be={distance}",
+  "postcodes": ["8038", "8802", "8803", "8800", "8942", "8810", "8804", "8820", "8805", "8832", "8806", "8807", "8805", "8815", "8041", "8134", "8045", "8055", "8008", "8702", "8700", "8703", "8704", "8706", "8707", "8708", "8712", "8713", "8714", "8616", "8617", "8132", "8124"],
+  "distances": ["1000", "2000", "5000", "8000", "10000", "15000"],
+  "search_terms": ["wohnwagen", "wohnmobile"],
+  "possible_file": "results/possible.json",
+  "rejected_file": "results/rejected.json"
+}
