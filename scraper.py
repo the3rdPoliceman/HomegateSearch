@@ -2,13 +2,12 @@ import argparse
 import json
 import os.path
 import re
+from email.message import EmailMessage
 from math import ceil
 import logging
 import requests
 from bs4 import BeautifulSoup
 import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 import email.utils
 
 # Constants
@@ -24,14 +23,17 @@ def get_email_config(email_config_file):
     with open(email_config_file, 'r') as f:
         return json.load(f)
 
-
-def send_email(subject, body, email_config):
-    """Sends an email with the specified subject and body."""
-    msg = MIMEMultipart()
+def send_email(subject, body, email_config, html=False):
+    msg = EmailMessage()
+    msg['Subject'] = subject
     msg['From'] = email_config['smtp_username']
     msg['To'] = email_config['email_recipient']
-    msg['Subject'] = subject
-    msg.attach(MIMEText(body, 'html'))
+    msg['Message-ID'] = email.utils.make_msgid()
+
+    if html:
+        msg.add_alternative(body, subtype='html')
+    else:
+        msg.set_content(body)
 
     try:
         server = smtplib.SMTP(email_config['smtp_server'], email_config['smtp_port'])
@@ -177,11 +179,17 @@ def main():
     new_possible_urls = possible_urls - old_possible_urls
     if new_possible_urls:
         subject = f"New possible properties found for {config['search_name']}"
-        body = f"The following new possible matches were found for your search {config['search_name']}\n\n"
-        body += '\n'.join(new_possible_urls)
-        body += "\n\nThis is in addition to the other previously found matches\n\n"
-        body += '\n'.join(old_possible_urls)
-        send_email(subject, body, email_config)
+        body = f"<h1>The following new possible matches were found for your search {config['search_name']}:</h1><br>"
+        body += '<br>'.join(f'<a href="{url}">{url}</a>' for url in new_possible_urls)
+        body += "<br><br>"
+
+        if old_possible_urls:
+            body += "<h1>This is in addition to the other previously found matches:</h1><br>"
+            body += '<br>'.join(f'<a href="{url}">{url}</a>' for url in old_possible_urls)
+        else:
+            body += "<p>No previous matches were found.</p>"
+
+        send_email(subject, body, email_config, html=True)
 
     write_json(possible_file, list(possible_urls))
     write_json(rejected_file, list(rejected_urls))
